@@ -1,12 +1,83 @@
 
-import React from "react";
+import React, { useState } from "react";
 import "./index.css";
 import TargetCursor from "./TargetCursor";
 import BounceCards from "./BounceCards";
 import DotGrid from "./DotGrid";
 import SpotlightCard from "./SpotlightCard";
 
+const SUBMISSIONS_STORAGE_KEY = "portfolio_contact_submissions";
+
 const App = () => {
+  const [formStatus, setFormStatus] = useState("idle");
+  const [formMessage, setFormMessage] = useState("");
+  const [submissions, setSubmissions] = useState(() => {
+    if (typeof window === "undefined") {
+      return [];
+    }
+
+    const savedData = window.localStorage.getItem(SUBMISSIONS_STORAGE_KEY);
+
+    if (!savedData) {
+      return [];
+    }
+
+    try {
+      return JSON.parse(savedData);
+    } catch {
+      return [];
+    }
+  });
+
+  const currentPath = typeof window === "undefined" ? "/" : window.location.pathname;
+  const isAdminRoute = currentPath === "/admin";
+
+  const handleContactSubmit = (e) => {
+    e.preventDefault();
+
+    const form = e.currentTarget;
+    const formData = new FormData(form);
+    const botTrap = formData.get("company");
+
+    if (botTrap) {
+      setFormStatus("success");
+      setFormMessage("Thanks for reaching out. Your message was received.");
+      form.reset();
+      return;
+    }
+
+    const payload = {
+      id: Date.now(),
+      name: formData.get("name"),
+      email: formData.get("email"),
+      message: formData.get("message"),
+      submittedAt: new Date().toISOString()
+    };
+
+    try {
+      setFormStatus("submitting");
+      const updatedSubmissions = [payload, ...submissions];
+
+      setSubmissions(updatedSubmissions);
+      window.localStorage.setItem(SUBMISSIONS_STORAGE_KEY, JSON.stringify(updatedSubmissions));
+      setFormStatus("success");
+      setFormMessage("Thanks! Your message was submitted successfully.");
+      form.reset();
+    } catch {
+      setFormStatus("error");
+      setFormMessage("Sorry, your message could not be saved. Please try again.");
+    }
+  };
+
+  const handleClearSubmissions = () => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    setSubmissions([]);
+    window.localStorage.removeItem(SUBMISSIONS_STORAGE_KEY);
+  };
+
   const allTechList = [
     "Python", "JavaScript", "Java", "C", "SQL",
     "Pandas", "NumPy", "Scikit Learn",
@@ -39,6 +110,59 @@ const App = () => {
     "rotate(-10deg) translate(150px)",
     "rotate(-15deg) translate(210px)"
   ];
+
+  if (isAdminRoute) {
+    return (
+      <div className="min-h-screen bg-base-200 text-base-content p-6 md:p-10">
+        <div className="max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-8">
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-primary">Admin Dashboard</h1>
+              <p className="opacity-70">Contact form submissions are stored in this browser.</p>
+            </div>
+            <div className="flex gap-3">
+              <a href="/" className="btn btn-outline">Back To Portfolio</a>
+              <button type="button" className="btn btn-error" onClick={handleClearSubmissions}>Clear All</button>
+            </div>
+          </div>
+
+          {submissions.length === 0 ? (
+            <div className="card bg-base-100 border border-base-300 shadow-lg">
+              <div className="card-body">
+                <p className="font-semibold">No submissions yet.</p>
+                <p className="opacity-70 text-sm">Submit the contact form from the home page to see entries here.</p>
+              </div>
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-2xl border border-base-300 bg-base-100 shadow-lg">
+              <table className="table w-full">
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Message</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {submissions.map((item) => (
+                    <tr key={item.id}>
+                      <td className="whitespace-nowrap text-sm">{new Date(item.submittedAt).toLocaleString()}</td>
+                      <td className="font-semibold">{item.name}</td>
+                      <td>
+                        <a href={`mailto:${item.email}`} className="link link-primary">{item.email}</a>
+                      </td>
+                      <td className="max-w-md whitespace-pre-wrap">{item.message}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-base-200 text-base-content font-sans">
@@ -100,6 +224,7 @@ const App = () => {
               <a href="https://www.linkedin.com/in/sampath25/" target="_blank" rel="noreferrer" className="btn btn-outline btn-accent cursor-target">LinkedIn</a>
                 <a href="https://leetcode.com/u/sampath-create/" target="_blank" rel="noreferrer" className="btn btn-outline btn-info cursor-target ml-2 lg:ml-4">LeetCode</a>
                 <a href="https://www.codechef.com/users/vvit23bq1a42b8" target="_blank" rel="noreferrer" className="btn btn-outline btn-success cursor-target ml-2">CodeChef</a>
+                <a href="/admin" className="btn btn-outline cursor-target">Admin</a>
             </div>
             
           </div>
@@ -274,23 +399,42 @@ const App = () => {
           <h2 className="text-4xl font-bold text-center mb-8 text-primary">Get In Touch</h2>
           <SpotlightCard className="shadow-2xl !bg-base-100 !border-none !rounded-3xl" spotlightColor="rgba(0, 229, 255, 0.15)">
             <div className="card-body">
-              <form onSubmit={(e) => { e.preventDefault(); alert("Thanks for reaching out! In a real app, this would submit via an API."); }}>
+              <form onSubmit={handleContactSubmit}>
                   <div className="form-control w-full mb-5">
                     <label className="label px-2"><span className="label-text font-bold text-base opacity-80">Your Name</span></label>
-                    <input type="text" placeholder="Your Name" className="input input-lg w-full rounded-2xl bg-base-200/60 border-2 border-base-300 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300" required />
+                    <input name="name" type="text" placeholder="Your Name" className="input input-lg w-full rounded-2xl bg-base-200/60 border-2 border-base-300 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300" required />
                   </div>
                   <div className="form-control w-full mb-5">
                     <label className="label px-2"><span className="label-text font-bold text-base opacity-80">Your Email</span></label>
-                    <input type="email" placeholder="Your Mail" className="input input-lg w-full rounded-2xl bg-base-200/60 border-2 border-base-300 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300" required />
+                    <input name="email" type="email" placeholder="Your Mail" className="input input-lg w-full rounded-2xl bg-base-200/60 border-2 border-base-300 focus:border-primary focus:ring-4 focus:ring-primary/20 transition-all duration-300" required />
                   </div>
                   <div className="form-control w-full mb-8 group">
                     <label className="label px-2"><span className="label-text font-bold text-base opacity-80">Message</span></label>
                     <div className="relative">
                       <div className="absolute -inset-0.5 bg-gradient-to-r from-primary to-accent rounded-3xl blur opacity-25 group-focus-within:opacity-75 transition duration-500"></div>
-                      <textarea className="textarea textarea-lg w-full h-40 rounded-3xl bg-base-100 border-2 border-transparent relative z-10 focus:border-transparent focus:outline-none focus:ring-0 leading-relaxed resize-none p-5" placeholder="Share your thoughts or ideas here..." required></textarea>
+                      <textarea name="message" className="textarea textarea-lg w-full h-40 rounded-3xl bg-base-100 border-2 border-transparent relative z-10 focus:border-transparent focus:outline-none focus:ring-0 leading-relaxed resize-none p-5" placeholder="Share your thoughts or ideas here..." required></textarea>
                     </div>
                   </div>
-                  <button type="submit" className="btn btn-primary w-full text-lg shadow-[0_0_20px_rgba(0,0,0,0.2)] hover:shadow-primary/40 rounded-2xl h-14 cursor-target transition-all duration-300 font-bold tracking-wide hover:-translate-y-1">Send Message</button>
+                  <input
+                    type="text"
+                    name="company"
+                    tabIndex="-1"
+                    autoComplete="off"
+                    className="hidden"
+                    aria-hidden="true"
+                  />
+                  <button
+                    type="submit"
+                    disabled={formStatus === "submitting"}
+                    className="btn btn-primary w-full text-lg shadow-[0_0_20px_rgba(0,0,0,0.2)] hover:shadow-primary/40 rounded-2xl h-14 cursor-target transition-all duration-300 font-bold tracking-wide hover:-translate-y-1 disabled:cursor-not-allowed disabled:opacity-70"
+                  >
+                    {formStatus === "submitting" ? "Saving..." : "Send Message"}
+                  </button>
+                  {formMessage && (
+                    <p className={`mt-4 text-sm font-semibold ${formStatus === "success" ? "text-success" : "text-error"}`}>
+                      {formMessage}
+                    </p>
+                  )}
                 </form>
               </div>
             </SpotlightCard>
